@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Neuvex Cognitive Survey</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+    body {
+      background-color: #f9f9f9;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      background: white;
+      padding: 30px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      border-radius: 8px;
+    }
+    h2 { margin-bottom: 20px; font-size: 22px; }
+    textarea, select, input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 8px;
+      font-size: 16px;
+    }
+    .buttons {
+      margin-top: 20px;
+      display: flex;
+      justify-content: flex-end;
+    }
+    button {
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:disabled { background-color: #ccc; }
+    .char-count {
+      font-size: 12px;
+      color: gray;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+<div class="container" id="app">
+<h2>Loading...</h2>
+</div>
+<script>
+    const pid = new URLSearchParams(window.location.search).get("pid") || "UNKNOWN";
+    const redirectBase = "https://api.opnion.io/processfinish";
+    const redirect = (status) => window.location.href = `${redirectBase}?status=${status}&transactionid=${pid}`;
+
+    const questions = [
+      { id: "consent", type: "checkbox", title: "Neuvex - Cognitive Analysis", required: true, content: `
+        <p>Welcome! This online survey is conducted by <b>Elicit Research Data and Analytics Ltd.</b> to collect your opinions and assess attentiveness, reasoning, and behavior in online environments.</p>
+        <p>✅ By proceeding, you agree to:<br>
+        - Provide honest, thoughtful answers.<br>
+        - Avoid using obscene language or AI assistance.<br>
+        - Risk disqualification if logic traps are failed.</p>
+        <label><input type="checkbox" id="consent"> I agree to participate</label>
+      ` },
+      { id: "q1", type: "select", title: "When was the last time you got paid for a survey?", options: ["Within this week", "Within this month", "More than a month ago", "Never"] },
+      { id: "q2", type: "select", title: "How often do you participate in surveys weekly?", options: ["Rarely", "1–2 times", "3–5 times", "Daily"] },
+      { id: "q3", type: "text", title: "Describe the taste of chocolate.", min: 60 },
+      { id: "q4", type: "text", title: "What’s a snack everyone in your country knows?", min: 60 },
+      { id: "q5", type: "select", title: "Please select 'Banana'", options: ["Apple", "Orange", "Banana", "Grape"], terminateIfWrong: "Banana" },
+      { id: "q6", type: "text", title: "What made you smile this week?", min: 60 },
+      { id: "q7", type: "text", title: "What motivates you to complete surveys like this?", min: 60 },
+      { id: "q8", type: "select", title: "Do you have an active LinkedIn profile?", options: ["Yes", "No", "Prefer not to say"] },
+      { id: "q9", type: "select", title: "How often do you log in to LinkedIn?", options: ["Daily", "Few times a week", "Rarely", "Never", "I don’t have an account"], terminateOptions: ["Never", "I don’t have an account"] },
+      { id: "q10", type: "text", title: "What type of posts do you interact with on LinkedIn?", min: 60 },
+      { id: "q11", type: "text", title: "Describe your most fruitful interaction on LinkedIn.", min: 100 },
+      { id: "q12", type: "text", title: "Have you ever received a job/client lead via LinkedIn?", min: 100 },
+      { id: "q13", type: "text", title: "What professional topics or companies do you follow?", min: 60 },
+      { id: "q14", type: "text", title: "Which LinkedIn feature is most useful to you and why?", min: 60 },
+      { id: "q15", type: "select", title: "Pelase select 'I want to get rewarded for my opinions!'", options: [
+        "I'm here by mistake",
+        "I dislike surveys",
+        "I’m just passing time",
+        "I want to get rewarded for my inputs!"
+      ], terminateIfWrong: "I want to get rewarded for my inputs!" }
+    ];
+
+    let current = 0;
+    const responses = {};
+
+    const render = () => {
+      const q = questions[current];
+      let html = `<h2>${q.title}</h2>${q.content || ""}`;
+
+      if (q.type === "text") {
+        html += `<textarea id="input" rows="4" oninput="updateCharCount()" autofocus></textarea>
+        <div class="char-count" id="charCount">0 / ${q.min || 0}</div>`;
+      } else if (q.type === "select") {
+        html += `<select id="input"><option value="">Select</option>${q.options.map(opt => `<option>${opt}</option>`).join("")}</select>`;
+      }
+
+      html += `<div class="buttons"><button onclick="next()">Next</button></div>`;
+      document.getElementById("app").innerHTML = html;
+    };
+
+    const updateCharCount = () => {
+      const input = document.getElementById("input");
+      const count = input.value.length;
+      document.getElementById("charCount").innerText = `${count} / ${questions[current].min}`;
+    };
+
+    const next = () => {
+      const q = questions[current];
+      const inputEl = document.getElementById("input") || document.getElementById(q.id);
+
+      let val = "";
+      if (q.id === "consent") {
+        if (!inputEl?.checked) return alert("You must agree to proceed.");
+        val = "Yes";
+      } else {
+        val = inputEl?.value?.trim() || "";
+        if (q.required && !val) return alert("This field is required.");
+        if (q.min && val.length < q.min) return alert(`Please enter at least ${q.min} characters.`);
+        if (q.terminateIfWrong && val !== q.terminateIfWrong) return redirect(4);
+        if (q.terminateOptions && q.terminateOptions.includes(val)) return redirect(2);
+      }
+
+      responses[q.id] = val;
+      localStorage.setItem("neuvex_temp", JSON.stringify(responses));
+
+      current++;
+      if (current >= questions.length) return submit();
+      render();
+    };
+
+    const submit = async () => {
+      responses.pid = pid;
+      responses.timestamp = new Date().toISOString();
+      responses.user_agent = navigator.userAgent;
+      responses.platform = navigator.platform;
+      responses.language = navigator.language;
+      responses.screen_size = `${window.screen.width}x${window.screen.height}`;
+
+      try {
+        await fetch("https://hook.us1.make.com/r47xrmntxly33jbih9dfopnmeeeian8n", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(responses)
+        });
+        redirect(1);
+      } catch (e) {
+        alert("Submission failed. Please try again.");
+      }
+    };
+
+    window.onload = render;
+    window.onpopstate = () => history.go(1);
+  
+function terminateSurvey() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const pid = urlParams.get("pid") || "UNKNOWN";
+  window.location.href = `https://api.opnion.io/processfinish?status=2&transactionid=${pid}`;
+}
+</script>
+</body>
+</html>
